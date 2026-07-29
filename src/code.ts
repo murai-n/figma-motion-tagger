@@ -141,7 +141,7 @@ async function buildExportJson(): Promise<ExportJson> {
         if (getEffectiveResizeMode(anim) === "absolute") {
           if (anim.size) exported.size = anim.size;
         } else if (anim.scale) {
-          exported.scale = { from: { x: anim.scale.x, y: anim.scale.y }, to: { x: 100, y: 100 } };
+          exported.scale = anim.scale;
         }
       }
 
@@ -323,10 +323,24 @@ async function applyMotionToFrame(seedNodeId: string) {
             easing,
           });
         } else if (anim.scale) {
-          scaleXKeyframes.push({ timelinePosition: startSec, value: { type: "FLOAT", value: anim.scale.x / 100 } });
-          scaleXKeyframes.push({ timelinePosition: endSec, value: { type: "FLOAT", value: 1 }, easing });
-          scaleYKeyframes.push({ timelinePosition: startSec, value: { type: "FLOAT", value: anim.scale.y / 100 } });
-          scaleYKeyframes.push({ timelinePosition: endSec, value: { type: "FLOAT", value: 1 }, easing });
+          scaleXKeyframes.push({
+            timelinePosition: startSec,
+            value: { type: "FLOAT", value: anim.scale.from.x / 100 },
+          });
+          scaleXKeyframes.push({
+            timelinePosition: endSec,
+            value: { type: "FLOAT", value: anim.scale.to.x / 100 },
+            easing,
+          });
+          scaleYKeyframes.push({
+            timelinePosition: startSec,
+            value: { type: "FLOAT", value: anim.scale.from.y / 100 },
+          });
+          scaleYKeyframes.push({
+            timelinePosition: endSec,
+            value: { type: "FLOAT", value: anim.scale.to.y / 100 },
+            easing,
+          });
         }
       }
     }

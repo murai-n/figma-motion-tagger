@@ -102,9 +102,9 @@ const resizeAbsoluteRow = $("resize-absolute-row");
 
 function updateResizeModeRows() {
   const isPercentage = resizeModeSelect.value === "percentage";
-  resizePercentageRow.style.display = isPercentage ? "flex" : "none";
-  // resize-absolute-row wraps two .field divs (width and height), stacked vertically —
+  // Both rows wrap two .field divs (X/Y or width/height), stacked vertically —
   // "block", not "flex" (which would put them side by side instead).
+  resizePercentageRow.style.display = isPercentage ? "block" : "none";
   resizeAbsoluteRow.style.display = isPercentage ? "none" : "block";
 }
 
@@ -187,8 +187,10 @@ function enterEditMode(anim: AnimationSpec) {
       (($("resize-from-height") as HTMLInputElement)).value = String(anim.size.from.height);
       (($("resize-to-height") as HTMLInputElement)).value = String(anim.size.to.height);
     } else if (anim.scale) {
-      (($("resize-scale-x") as HTMLInputElement)).value = String(anim.scale.x);
-      (($("resize-scale-y") as HTMLInputElement)).value = String(anim.scale.y);
+      (($("resize-scale-from-x") as HTMLInputElement)).value = String(anim.scale.from.x);
+      (($("resize-scale-to-x") as HTMLInputElement)).value = String(anim.scale.to.x);
+      (($("resize-scale-from-y") as HTMLInputElement)).value = String(anim.scale.from.y);
+      (($("resize-scale-to-y") as HTMLInputElement)).value = String(anim.scale.to.y);
     }
   }
 
@@ -338,7 +340,8 @@ function resizeDetailText(anim: AnimationSpec): string {
     return `${from.width}×${from.height} → ${to.width}×${to.height}`;
   }
   if (anim.scale) {
-    return `x:${anim.scale.x}% y:${anim.scale.y}%`;
+    const { from, to } = anim.scale;
+    return `x:${from.x}%→${to.x}% y:${from.y}%→${to.y}%`;
   }
   return "";
 }
@@ -443,9 +446,14 @@ $("add-anim-btn").addEventListener("click", () => {
         to: { width: toWidth, height: toHeight },
       };
     } else {
-      const scaleX = Number((($("resize-scale-x") as HTMLInputElement)).value) || 0;
-      const scaleY = Number((($("resize-scale-y") as HTMLInputElement)).value) || 0;
-      animation.scale = { x: scaleX, y: scaleY };
+      const fromScaleX = Number((($("resize-scale-from-x") as HTMLInputElement)).value) || 0;
+      const toScaleX = Number((($("resize-scale-to-x") as HTMLInputElement)).value) || 0;
+      const fromScaleY = Number((($("resize-scale-from-y") as HTMLInputElement)).value) || 0;
+      const toScaleY = Number((($("resize-scale-to-y") as HTMLInputElement)).value) || 0;
+      animation.scale = {
+        from: { x: fromScaleX, y: fromScaleY },
+        to: { x: toScaleX, y: toScaleY },
+      };
     }
   }
 

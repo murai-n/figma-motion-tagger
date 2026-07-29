@@ -362,14 +362,24 @@
                   <option value="absolute">幅・高さ (from-to)</option>
                 </select>
               </div>
-              <div class="row" id="resize-percentage-row">
+              <div id="resize-percentage-row">
                 <div class="field">
                   <label>X方向 (%)</label>
-                  <input type="number" id="resize-scale-x" value="80" step="1" />
+                  <div class="from-to">
+                    <input type="number" id="resize-scale-from-x" value="80" step="1" />
+                    <span class="from-to-arrow" aria-hidden="true">→</span>
+                    <input type="number" id="resize-scale-to-x" value="100" step="1" />
+                  </div>
+                  <div class="from-to-sublabels"><span>from</span><span>to</span></div>
                 </div>
                 <div class="field">
                   <label>Y方向 (%)</label>
-                  <input type="number" id="resize-scale-y" value="80" step="1" />
+                  <div class="from-to">
+                    <input type="number" id="resize-scale-from-y" value="80" step="1" />
+                    <span class="from-to-arrow" aria-hidden="true">→</span>
+                    <input type="number" id="resize-scale-to-y" value="100" step="1" />
+                  </div>
+                  <div class="from-to-sublabels"><span>from</span><span>to</span></div>
                 </div>
               </div>
               <div id="resize-absolute-row" style="display:none">
