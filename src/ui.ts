@@ -8,6 +8,7 @@ import {
   UiToPluginMessage,
 } from "./types";
 import { getEffectiveMoveMode } from "./move";
+import { getEffectiveResizeMode } from "./resize";
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -93,10 +94,47 @@ moveModeSelect.addEventListener("change", () => {
   if (moveModeSelect.value === "absolute") prefillAbsoluteMoveDefaults();
 });
 
+// ---------- Anim type UI (show/hide resize fields) ----------
+const resizeFields = $("resize-fields");
+const resizeModeSelect = $("resize-mode") as HTMLSelectElement;
+const resizePercentageRow = $("resize-percentage-row");
+const resizeAbsoluteRow = $("resize-absolute-row");
+
+function updateResizeModeRows() {
+  const isPercentage = resizeModeSelect.value === "percentage";
+  resizePercentageRow.style.display = isPercentage ? "flex" : "none";
+  // resize-absolute-row wraps two .field divs (width and height), stacked vertically —
+  // "block", not "flex" (which would put them side by side instead).
+  resizeAbsoluteRow.style.display = isPercentage ? "none" : "block";
+}
+
+// Absolute width/height are specific to whichever part is selected, so refill them.
+// Both from and to default to the selected layer's own current size, so the
+// animation is a no-op resize until the user adjusts either end.
+function prefillAbsoluteResizeDefaults() {
+  if (currentSelection.length !== 1) return;
+  const sel = currentSelection[0];
+  const w = String(Math.round(sel.width));
+  const h = String(Math.round(sel.height));
+  (($("resize-from-width") as HTMLInputElement)).value = w;
+  (($("resize-to-width") as HTMLInputElement)).value = w;
+  (($("resize-from-height") as HTMLInputElement)).value = h;
+  (($("resize-to-height") as HTMLInputElement)).value = h;
+}
+
+resizeModeSelect.addEventListener("change", () => {
+  updateResizeModeRows();
+  if (resizeModeSelect.value === "absolute") prefillAbsoluteResizeDefaults();
+});
+
 animTypeSelect.addEventListener("change", () => {
   moveFields.style.display = animTypeSelect.value === "move" ? "block" : "none";
+  resizeFields.style.display = animTypeSelect.value === "resize" ? "block" : "none";
   if (animTypeSelect.value === "move" && moveModeSelect.value === "absolute") {
     prefillAbsoluteMoveDefaults();
+  }
+  if (animTypeSelect.value === "resize" && resizeModeSelect.value === "absolute") {
+    prefillAbsoluteResizeDefaults();
   }
 });
 
@@ -106,6 +144,7 @@ function enterEditMode(anim: AnimationSpec) {
 
   animTypeSelect.value = anim.type;
   moveFields.style.display = anim.type === "move" ? "block" : "none";
+  resizeFields.style.display = anim.type === "resize" ? "block" : "none";
 
   (($("anim-id-input") as HTMLInputElement)).value = anim.id;
   (($("anim-duration") as HTMLInputElement)).value = String(anim.duration);
@@ -135,6 +174,21 @@ function enterEditMode(anim: AnimationSpec) {
     } else if (anim.offset) {
       (($("anim-dx") as HTMLInputElement)).value = String(anim.offset.dx);
       (($("anim-dy") as HTMLInputElement)).value = String(anim.offset.dy);
+    }
+  }
+
+  if (anim.type === "resize") {
+    const mode = getEffectiveResizeMode(anim);
+    resizeModeSelect.value = mode;
+    updateResizeModeRows();
+    if (mode === "absolute" && anim.size) {
+      (($("resize-from-width") as HTMLInputElement)).value = String(anim.size.from.width);
+      (($("resize-to-width") as HTMLInputElement)).value = String(anim.size.to.width);
+      (($("resize-from-height") as HTMLInputElement)).value = String(anim.size.from.height);
+      (($("resize-to-height") as HTMLInputElement)).value = String(anim.size.to.height);
+    } else if (anim.scale) {
+      (($("resize-scale-x") as HTMLInputElement)).value = String(anim.scale.x);
+      (($("resize-scale-y") as HTMLInputElement)).value = String(anim.scale.y);
     }
   }
 
@@ -181,11 +235,15 @@ function renderSelected() {
   const idInput = $("tag-id-input") as HTMLInputElement;
   idInput.value = sel.tag ? sel.tag.id : "";
 
-  // Absolute move coordinates are specific to whichever part is selected — refresh them
-  // for the newly selected part so a stale position from a different part never gets
-  // submitted by accident. Skipped while editing, since enterEditMode already set them.
+  // Absolute move coordinates / resize dimensions are specific to whichever part is
+  // selected — refresh them for the newly selected part so stale values from a
+  // different part never get submitted by accident. Skipped while editing, since
+  // enterEditMode already set them.
   if (!editingAnimId && animTypeSelect.value === "move" && moveModeSelect.value === "absolute") {
     prefillAbsoluteMoveDefaults();
+  }
+  if (!editingAnimId && animTypeSelect.value === "resize" && resizeModeSelect.value === "absolute") {
+    prefillAbsoluteResizeDefaults();
   }
 
   const deleteBtn = $("delete-tag-btn") as HTMLButtonElement;
@@ -206,7 +264,9 @@ function renderSelected() {
       const item = document.createElement("div");
       item.className = "anim-item";
       const label = animTypeLabel(anim.type);
-      const detail = anim.type === "move" ? ` ${moveDetailText(anim)}` : "";
+      let detail = "";
+      if (anim.type === "move") detail = ` ${moveDetailText(anim)}`;
+      else if (anim.type === "resize") detail = ` ${resizeDetailText(anim)}`;
 
       const infoSpan = document.createElement("span");
       const badge = document.createElement("span");
@@ -257,6 +317,7 @@ function renderSelected() {
 function animTypeLabel(type: AnimationType): string {
   if (type === "fadeIn") return "フェードイン";
   if (type === "fadeOut") return "フェードアウト";
+  if (type === "resize") return "サイズ変更";
   return "ムーブ";
 }
 
@@ -267,6 +328,17 @@ function moveDetailText(anim: AnimationSpec): string {
   }
   if (anim.offset) {
     return `dx:${anim.offset.dx} dy:${anim.offset.dy}`;
+  }
+  return "";
+}
+
+function resizeDetailText(anim: AnimationSpec): string {
+  if (getEffectiveResizeMode(anim) === "absolute" && anim.size) {
+    const { from, to } = anim.size;
+    return `${from.width}×${from.height} → ${to.width}×${to.height}`;
+  }
+  if (anim.scale) {
+    return `x:${anim.scale.x}% y:${anim.scale.y}%`;
   }
   return "";
 }
@@ -355,6 +427,25 @@ $("add-anim-btn").addEventListener("click", () => {
       const dx = Number((($("anim-dx") as HTMLInputElement)).value) || 0;
       const dy = Number((($("anim-dy") as HTMLInputElement)).value) || 0;
       animation.offset = { dx, dy };
+    }
+  }
+
+  if (type === "resize") {
+    const mode = resizeModeSelect.value === "absolute" ? "absolute" : "percentage";
+    animation.resizeMode = mode;
+    if (mode === "absolute") {
+      const fromWidth = Number((($("resize-from-width") as HTMLInputElement)).value) || 0;
+      const fromHeight = Number((($("resize-from-height") as HTMLInputElement)).value) || 0;
+      const toWidth = Number((($("resize-to-width") as HTMLInputElement)).value) || 0;
+      const toHeight = Number((($("resize-to-height") as HTMLInputElement)).value) || 0;
+      animation.size = {
+        from: { width: fromWidth, height: fromHeight },
+        to: { width: toWidth, height: toHeight },
+      };
+    } else {
+      const scaleX = Number((($("resize-scale-x") as HTMLInputElement)).value) || 0;
+      const scaleY = Number((($("resize-scale-y") as HTMLInputElement)).value) || 0;
+      animation.scale = { x: scaleX, y: scaleY };
     }
   }
 

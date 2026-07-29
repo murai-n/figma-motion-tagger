@@ -1,4 +1,4 @@
-export type AnimationType = "fadeIn" | "fadeOut" | "move";
+export type AnimationType = "fadeIn" | "fadeOut" | "move" | "resize";
 
 export type EasingPreset =
   | "linear"
@@ -34,6 +34,17 @@ export interface AnimationSpec {
   // e.g. dx: -100 means it starts 100px to the left of its final spot. Used when
   // moveMode === "delta" (also the default interpretation when moveMode is unset).
   offset?: { dx: number; dy: number };
+
+  // "resize" only, below. `resizeMode` selects which of `scale` / `size` is
+  // authoritative. Unset defaults to "percentage" (resize's default mode).
+  resizeMode?: "percentage" | "absolute";
+  // Percentage mode: per-axis scale as a percentage (100 = no change, 150 = 1.5x).
+  // The animation runs from this percentage to the layer's normal (100%) size —
+  // mirrors "move" delta mode, where the end state is always the layer's real size.
+  scale?: { x: number; y: number };
+  // Absolute mode: explicit width/height in px for both start (from) and end (to),
+  // independent of the layer's actual current size — mirrors "move" absolute mode.
+  size?: { from: { width: number; height: number }; to: { width: number; height: number } };
 }
 
 export interface MotionTag {
@@ -47,6 +58,8 @@ export interface SelectionInfo {
   type: string;
   x: number;
   y: number;
+  width: number;
+  height: number;
   tag: MotionTag | null;
 }
 
@@ -59,6 +72,10 @@ export interface ExportAnimation {
   bezier: [number, number, number, number];
   opacity?: { from: number; to: number };
   position?: { from: { x: number; y: number }; to: { x: number; y: number } };
+  // "resize" percentage mode only. 100 = no change.
+  scale?: { from: { x: number; y: number }; to: { x: number; y: number } };
+  // "resize" absolute mode only.
+  size?: { from: { width: number; height: number }; to: { width: number; height: number } };
 }
 
 export interface ExportElement {

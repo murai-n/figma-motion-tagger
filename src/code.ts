@@ -11,6 +11,7 @@ import {
 } from "./types";
 import { resolveEasingToBezier } from "./easing";
 import { resolveMovePositions } from "./move";
+import { getEffectiveResizeMode } from "./resize";
 
 const TAG_KEY = "motionTag";
 
@@ -44,14 +45,21 @@ function isPositionable(node: BaseNode): node is SceneNode & { x: number; y: num
   return "x" in node && "y" in node;
 }
 
+function isResizable(node: BaseNode): node is SceneNode & { width: number; height: number } {
+  return "width" in node && "height" in node;
+}
+
 function toSelectionInfo(node: SceneNode): SelectionInfo {
   const pos = isPositionable(node) ? { x: node.x, y: node.y } : { x: 0, y: 0 };
+  const size = isResizable(node) ? { width: node.width, height: node.height } : { width: 0, height: 0 };
   return {
     nodeId: node.id,
     name: node.name,
     type: node.type,
     x: pos.x,
     y: pos.y,
+    width: size.width,
+    height: size.height,
     tag: readTag(node),
   };
 }
@@ -128,6 +136,12 @@ async function buildExportJson(): Promise<ExportJson> {
         const positions = resolveMovePositions(anim, currentPos);
         if (positions) {
           exported.position = positions;
+        }
+      } else if (anim.type === "resize") {
+        if (getEffectiveResizeMode(anim) === "absolute") {
+          if (anim.size) exported.size = anim.size;
+        } else if (anim.scale) {
+          exported.scale = { from: { x: anim.scale.x, y: anim.scale.y }, to: { x: 100, y: 100 } };
         }
       }
 
@@ -212,7 +226,15 @@ function toMotionEasing(easing: string): MotionEasing {
 
 function hasAnyMotionTrack(node: SceneNode): boolean {
   const tracks = node.manualKeyframeTracks;
-  return !!(tracks.OPACITY || tracks.TRANSLATION_X || tracks.TRANSLATION_Y);
+  return !!(
+    tracks.OPACITY ||
+    tracks.TRANSLATION_X ||
+    tracks.TRANSLATION_Y ||
+    tracks.SCALE_X ||
+    tracks.SCALE_Y ||
+    tracks.WIDTH ||
+    tracks.HEIGHT
+  );
 }
 
 /**
@@ -258,6 +280,10 @@ async function applyMotionToFrame(seedNodeId: string) {
     const opacityKeyframes: ManualKeyframeInput[] = [];
     const translationXKeyframes: ManualKeyframeInput[] = [];
     const translationYKeyframes: ManualKeyframeInput[] = [];
+    const scaleXKeyframes: ManualKeyframeInput[] = [];
+    const scaleYKeyframes: ManualKeyframeInput[] = [];
+    const widthKeyframes: ManualKeyframeInput[] = [];
+    const heightKeyframes: ManualKeyframeInput[] = [];
 
     for (const anim of tag?.animations ?? []) {
       const startSec = anim.delay / 1000;
@@ -285,6 +311,22 @@ async function applyMotionToFrame(seedNodeId: string) {
           translationXKeyframes.push({ timelinePosition: endSec, value: { type: "FLOAT", value: dxEnd }, easing });
           translationYKeyframes.push({ timelinePosition: startSec, value: { type: "FLOAT", value: dyStart } });
           translationYKeyframes.push({ timelinePosition: endSec, value: { type: "FLOAT", value: dyEnd }, easing });
+        }
+      } else if (anim.type === "resize") {
+        if (getEffectiveResizeMode(anim) === "absolute" && anim.size) {
+          widthKeyframes.push({ timelinePosition: startSec, value: { type: "FLOAT", value: anim.size.from.width } });
+          widthKeyframes.push({ timelinePosition: endSec, value: { type: "FLOAT", value: anim.size.to.width }, easing });
+          heightKeyframes.push({ timelinePosition: startSec, value: { type: "FLOAT", value: anim.size.from.height } });
+          heightKeyframes.push({
+            timelinePosition: endSec,
+            value: { type: "FLOAT", value: anim.size.to.height },
+            easing,
+          });
+        } else if (anim.scale) {
+          scaleXKeyframes.push({ timelinePosition: startSec, value: { type: "FLOAT", value: anim.scale.x / 100 } });
+          scaleXKeyframes.push({ timelinePosition: endSec, value: { type: "FLOAT", value: 1 }, easing });
+          scaleYKeyframes.push({ timelinePosition: startSec, value: { type: "FLOAT", value: anim.scale.y / 100 } });
+          scaleYKeyframes.push({ timelinePosition: endSec, value: { type: "FLOAT", value: 1 }, easing });
         }
       }
     }
@@ -323,6 +365,50 @@ async function applyMotionToFrame(seedNodeId: string) {
       touchedThisNode = true;
     } else if (existingTracks.TRANSLATION_Y) {
       node.removeManualKeyframeTrack({ type: "PROPERTY", name: "TRANSLATION_Y" });
+    }
+
+    if (scaleXKeyframes.length > 0) {
+      scaleXKeyframes.sort(byPosition);
+      node.applyManualKeyframeTrack(
+        { type: "PROPERTY", name: "SCALE_X" },
+        { baseValue: scaleXKeyframes[0].value, keyframes: scaleXKeyframes },
+      );
+      touchedThisNode = true;
+    } else if (existingTracks.SCALE_X) {
+      node.removeManualKeyframeTrack({ type: "PROPERTY", name: "SCALE_X" });
+    }
+
+    if (scaleYKeyframes.length > 0) {
+      scaleYKeyframes.sort(byPosition);
+      node.applyManualKeyframeTrack(
+        { type: "PROPERTY", name: "SCALE_Y" },
+        { baseValue: scaleYKeyframes[0].value, keyframes: scaleYKeyframes },
+      );
+      touchedThisNode = true;
+    } else if (existingTracks.SCALE_Y) {
+      node.removeManualKeyframeTrack({ type: "PROPERTY", name: "SCALE_Y" });
+    }
+
+    if (widthKeyframes.length > 0) {
+      widthKeyframes.sort(byPosition);
+      node.applyManualKeyframeTrack(
+        { type: "PROPERTY", name: "WIDTH" },
+        { baseValue: widthKeyframes[0].value, keyframes: widthKeyframes },
+      );
+      touchedThisNode = true;
+    } else if (existingTracks.WIDTH) {
+      node.removeManualKeyframeTrack({ type: "PROPERTY", name: "WIDTH" });
+    }
+
+    if (heightKeyframes.length > 0) {
+      heightKeyframes.sort(byPosition);
+      node.applyManualKeyframeTrack(
+        { type: "PROPERTY", name: "HEIGHT" },
+        { baseValue: heightKeyframes[0].value, keyframes: heightKeyframes },
+      );
+      touchedThisNode = true;
+    } else if (existingTracks.HEIGHT) {
+      node.removeManualKeyframeTrack({ type: "PROPERTY", name: "HEIGHT" });
     }
 
     if (touchedThisNode) {

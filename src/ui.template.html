@@ -278,6 +278,7 @@
                 <option value="fadeIn">フェードイン</option>
                 <option value="fadeOut">フェードアウト</option>
                 <option value="move">ムーブ</option>
+                <option value="resize">サイズ変更</option>
               </select>
             </div>
             <div class="field">
@@ -350,6 +351,45 @@
                 <div class="field">
                   <label>移動元 dy (px)</label>
                   <input type="number" id="anim-dy" value="0" step="1" />
+                </div>
+              </div>
+            </div>
+            <div id="resize-fields" style="display:none">
+              <div class="field">
+                <label>指定方法</label>
+                <select id="resize-mode">
+                  <option value="percentage" selected>パーセンテージ</option>
+                  <option value="absolute">幅・高さ (from-to)</option>
+                </select>
+              </div>
+              <div class="row" id="resize-percentage-row">
+                <div class="field">
+                  <label>X方向 (%)</label>
+                  <input type="number" id="resize-scale-x" value="80" step="1" />
+                </div>
+                <div class="field">
+                  <label>Y方向 (%)</label>
+                  <input type="number" id="resize-scale-y" value="80" step="1" />
+                </div>
+              </div>
+              <div id="resize-absolute-row" style="display:none">
+                <div class="field">
+                  <label>幅 (px)</label>
+                  <div class="from-to">
+                    <input type="number" id="resize-from-width" step="1" />
+                    <span class="from-to-arrow" aria-hidden="true">→</span>
+                    <input type="number" id="resize-to-width" step="1" />
+                  </div>
+                  <div class="from-to-sublabels"><span>from</span><span>to</span></div>
+                </div>
+                <div class="field">
+                  <label>高さ (px)</label>
+                  <div class="from-to">
+                    <input type="number" id="resize-from-height" step="1" />
+                    <span class="from-to-arrow" aria-hidden="true">→</span>
+                    <input type="number" id="resize-to-height" step="1" />
+                  </div>
+                  <div class="from-to-sublabels"><span>from</span><span>to</span></div>
                 </div>
               </div>
             </div>
