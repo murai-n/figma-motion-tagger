@@ -1,0 +1,52 @@
+<svg width="680" height="360" viewBox="0 0 680 360" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Motion Taggerの設定項目とJSON出力の対応</title>
+<desc>Motion Taggerプラグインで設定する部品IDやアニメーションのプロパティが、そのままJSON出力の対応するキーに整形されることを示す対応図</desc>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#73726c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+<style>
+text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.th { font-size: 14px; font-weight: 500; }
+.ts { font-size: 12px; font-weight: 400; }
+.line { stroke: #73726c; stroke-width: 1.5; fill: none; }
+</style>
+
+<g>
+<rect x="30" y="40" width="270" height="280" rx="20" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text class="th" x="165" y="68" text-anchor="middle" dominant-baseline="central" fill="#085041">Motion Taggerで設定</text>
+</g>
+<g>
+<rect x="50" y="95" width="230" height="65" rx="12" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="th" x="165" y="117" text-anchor="middle" dominant-baseline="central" fill="#444441">部品(要素)</text>
+<text class="ts" x="165" y="139" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">部品ID・レイヤー名</text>
+</g>
+<g>
+<rect x="50" y="175" width="230" height="110" rx="12" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="th" x="165" y="197" text-anchor="middle" dominant-baseline="central" fill="#444441">アニメーション</text>
+<text class="ts" x="165" y="217" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">アニメID・種類</text>
+<text class="ts" x="165" y="237" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">duration・delay・easing</text>
+<text class="ts" x="165" y="257" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">位置/サイズのfrom-to値</text>
+</g>
+
+<text class="ts" x="334" y="185" text-anchor="middle" fill="#5F5E5A">整形して出力</text>
+<line x1="300" y1="200" x2="368" y2="200" class="line" marker-end="url(#arrow)"/>
+
+<g>
+<rect x="370" y="40" width="270" height="280" rx="20" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+<text class="th" x="505" y="68" text-anchor="middle" dominant-baseline="central" fill="#712B13">出力JSON</text>
+</g>
+<g>
+<rect x="390" y="95" width="230" height="65" rx="12" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="th" x="505" y="117" text-anchor="middle" dominant-baseline="central" fill="#444441">elements[]</text>
+<text class="ts" x="505" y="139" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">id・name</text>
+</g>
+<g>
+<rect x="390" y="175" width="230" height="110" rx="12" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text class="th" x="505" y="197" text-anchor="middle" dominant-baseline="central" fill="#444441">animations[]</text>
+<text class="ts" x="505" y="217" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">id・type・duration</text>
+<text class="ts" x="505" y="237" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">delay・easing・bezier</text>
+<text class="ts" x="505" y="257" text-anchor="middle" dominant-baseline="central" fill="#5F5E5A">position/scale/size</text>
+</g>
+</svg>

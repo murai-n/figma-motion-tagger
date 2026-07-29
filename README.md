@@ -2,6 +2,10 @@
 
 Figma上のレイヤーにIDを割り当て、フェードイン/フェードアウト/ムーブ/サイズ変更のアニメーション(duration, delay, easing)を設定して、JSONとしてエクスポートするプラグインです。
 
+![処理フロー](docs/diagrams/workflow.svg)
+
+![設定項目とJSON出力の対応](docs/diagrams/field-mapping.svg)
+
 ## セットアップ
 
 ```bash
