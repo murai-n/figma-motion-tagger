@@ -85,6 +85,7 @@
   .from-to { display: flex; align-items: center; gap: 6px; }
   .from-to input { flex: 1; min-width: 0; }
   .from-to-arrow { color: var(--muted); font-size: 13px; flex-shrink: 0; }
+  .variable-select { margin-top: 4px; font-size: 10px; padding: 4px 6px; color: var(--muted); }
   .from-to-sublabels {
     display: flex;
     justify-content: space-between;
@@ -230,13 +231,45 @@
     line-height: 1.5;
   }
   #offset-fields { display: none; }
+  .browse-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 11px;
+    background: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+    text-align: left;
+  }
+  .browse-row:hover { border-color: var(--accent); }
+  .browse-count { color: var(--muted); font-size: 10px; flex-shrink: 0; margin-left: 8px; }
+  .browse-back-btn { margin-bottom: 10px; }
+  .browse-heading { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  #sync-result-banner {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .sync-skip-heading { color: var(--warning); }
+  .sync-skip-list { margin: 4px 0 0 0; padding-left: 18px; }
 </style>
 </head>
 <body>
 <div id="app">
   <header>
     <button class="tab-btn active" data-tab="selected">選択中</button>
-    <button class="tab-btn" data-tab="all">全アニメ一覧</button>
+    <button class="tab-btn" data-tab="browse">アニメ一覧</button>
+    <button class="tab-btn" data-tab="all">JSON</button>
   </header>
   <main>
     <div id="error-banner"></div>
@@ -264,6 +297,13 @@
         <div class="panel" id="animations-panel">
           <h3>アニメーション</h3>
 
+          <div class="actions" style="margin-bottom:10px">
+            <button class="secondary" id="sync-from-motion-btn" style="width:100%">
+              Motionタイムラインの変更を取り込む
+            </button>
+          </div>
+          <div id="sync-result-banner" style="display:none"></div>
+
           <div class="subsection">
             <h4 class="subsection-title">設定済みアニメーション</h4>
             <div id="anim-list"></div>
@@ -289,10 +329,16 @@
               <div class="field">
                 <label>Duration (ms)</label>
                 <input type="number" id="anim-duration" value="300" min="0" step="10" />
+                <select class="variable-select" id="anim-duration-variable">
+                  <option value="">数値を直接指定</option>
+                </select>
               </div>
               <div class="field">
                 <label>Delay (ms)</label>
                 <input type="number" id="anim-delay" value="0" min="0" step="10" />
+                <select class="variable-select" id="anim-delay-variable">
+                  <option value="">数値を直接指定</option>
+                </select>
               </div>
             </div>
             <div class="field">
@@ -414,6 +460,10 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <section id="tab-browse" class="tab-panel">
+      <div id="browse-content"></div>
     </section>
 
     <section id="tab-all" class="tab-panel">

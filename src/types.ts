@@ -22,6 +22,17 @@ export interface AnimationSpec {
   delay: number;
   easing: string; // preset name, or "cubic-bezier(x1,y1,x2,y2)" for custom
 
+  // Optional bindings to Figma Variables (FLOAT for duration/delay, STRING for
+  // easing). When set, the bound variable's value — resolved for the specific
+  // node being animated via Variable.resolveForConsumer() — is used instead of
+  // the literal duration/delay/easing above. The literal fields are kept as a
+  // fallback (e.g. if the variable is later deleted) and as what's shown while
+  // no variable is bound. Resolved fresh every time the plugin re-syncs (on
+  // every add/edit/delete), not live-reactive to variable edits in between.
+  durationVariableId?: string;
+  delayVariableId?: string;
+  easingVariableId?: string;
+
   // "move" only, below. `moveMode` selects which of `position` / `offset` is
   // authoritative. Unset means legacy data saved before mode-switching existed,
   // which always meant delta mode. See src/move.ts for how these are resolved.
@@ -65,10 +76,16 @@ export interface SelectionInfo {
 export interface ExportAnimation {
   id: string;
   type: AnimationType;
-  duration: number;
-  delay: number;
-  easing: string;
+  duration: number; // always the resolved value, whether literal or from a bound variable
+  delay: number; // always the resolved value
+  easing: string; // always the resolved value
   bezier: [number, number, number, number];
+  // Present only when the corresponding property is bound to a Figma Variable —
+  // the variable's name, for traceability (the numeric/string value above is
+  // already resolved and usable on its own without reading these).
+  durationVariable?: string;
+  delayVariable?: string;
+  easingVariable?: string;
   opacity?: { from: number; to: number };
   position?: { from: { x: number; y: number }; to: { x: number; y: number } };
   // "resize" percentage mode only. 100 = no change.
@@ -98,6 +115,27 @@ export interface DuplicateIdWarning {
   elements: { name: string; nodeId: string }[];
 }
 
+export interface VariableOption {
+  id: string;
+  name: string;
+  // Present only for variables sourced from a team library (not yet imported into
+  // this file) — the library's display name, so the UI can distinguish them from
+  // this file's own local variables (e.g. "変数: duration/fast (Design System)").
+  library?: string;
+}
+
+// Result of a "sync-from-motion" pull: reads the current Figma Motion (Beta) manual
+// keyframe tracks for a frame back into this plugin's animation data, so edits made
+// directly in Figma's native Motion timeline aren't silently lost/diverged from what
+// the plugin (and its JSON export) thinks the animations are. Read-only with respect
+// to Motion itself — see resolveMotionSyncScope's doc comment in code.ts for why some
+// cases can't be safely reconstructed and are reported in `skipped` instead of guessed.
+export interface MotionSyncResult {
+  updated: number;
+  removed: number;
+  skipped: { name: string; reason: string }[];
+}
+
 // UI -> Plugin messages
 export type UiToPluginMessage =
   | { type: "ui-ready" }
@@ -106,11 +144,16 @@ export type UiToPluginMessage =
   // (so animations can be added without first pressing "部品IDを追加").
   | { type: "save-animation"; nodeId: string; animation: AnimationSpec; id: string }
   | { type: "delete-animation"; nodeId: string; animId: string }
-  | { type: "delete-tag"; nodeId: string };
+  | { type: "delete-tag"; nodeId: string }
+  | { type: "sync-from-motion"; nodeId: string };
 
 // Plugin -> UI messages
 export type PluginToUiMessage =
   | { type: "selection-changed"; selection: SelectionInfo[] }
   // Sent automatically after every add/delete so the UI can keep a live JSON preview.
   | { type: "export-preview"; json: ExportJson; duplicateIds: DuplicateIdWarning[] }
+  // Sent once at ui-ready. Lists the file's local FLOAT/STRING variables so the UI
+  // can offer them for duration/delay (FLOAT) and easing (STRING) binding.
+  | { type: "variables"; floatVariables: VariableOption[]; stringVariables: VariableOption[] }
+  | ({ type: "motion-sync-result" } & MotionSyncResult)
   | { type: "error"; message: string };

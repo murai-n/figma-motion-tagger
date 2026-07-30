@@ -2,10 +2,14 @@ import {
   AnimationSpec,
   AnimationType,
   DuplicateIdWarning,
+  ExportAnimation,
+  ExportElement,
   ExportJson,
+  MotionSyncResult,
   PluginToUiMessage,
   SelectionInfo,
   UiToPluginMessage,
+  VariableOption,
 } from "./types";
 import { getEffectiveMoveMode } from "./move";
 import { getEffectiveResizeMode } from "./resize";
@@ -23,6 +27,8 @@ function send(message: UiToPluginMessage) {
 let currentSelection: SelectionInfo[] = [];
 let latestExportJson: ExportJson | null = null;
 let editingAnimId: string | null = null;
+let floatVariables: VariableOption[] = [];
+let stringVariables: VariableOption[] = [];
 
 // ---------- Tabs ----------
 const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab-btn"));
@@ -57,6 +63,53 @@ function getSelectedEasing(): string {
     return (($("anim-easing-custom") as HTMLInputElement).value || "linear").trim();
   }
   return easingSelect.value;
+}
+
+// ---------- Figma Variables (optional bindings for duration/delay/easing) ----------
+function variableLabel(v: VariableOption): string {
+  return v.library ? `変数: ${v.name} (${v.library})` : `変数: ${v.name}`;
+}
+
+function variableName(id: string, options: VariableOption[]): string {
+  const v = options.find((o) => o.id === id);
+  return v ? variableLabel(v).replace(/^変数: /, "") : id;
+}
+
+function populateVariableSelect(select: HTMLSelectElement, options: VariableOption[]) {
+  const currentValue = select.value;
+  select.innerHTML = "";
+  const noneOption = document.createElement("option");
+  noneOption.value = "";
+  noneOption.textContent = "数値を直接指定";
+  select.appendChild(noneOption);
+  options.forEach((v) => {
+    const opt = document.createElement("option");
+    opt.value = v.id;
+    opt.textContent = variableLabel(v);
+    select.appendChild(opt);
+  });
+  if (options.some((v) => v.id === currentValue)) select.value = currentValue;
+}
+
+function renderVariableOptions() {
+  populateVariableSelect($("anim-duration-variable") as HTMLSelectElement, floatVariables);
+  populateVariableSelect($("anim-delay-variable") as HTMLSelectElement, floatVariables);
+
+  // Easing reuses the same select as the presets/custom option — inject variable
+  // entries just before "custom", removing any stale ones from a previous render.
+  const currentEasingValue = easingSelect.value;
+  Array.from(easingSelect.querySelectorAll('option[value^="var:"]')).forEach((o) => o.remove());
+  const customOption = easingSelect.querySelector('option[value="custom"]');
+  stringVariables.forEach((v) => {
+    const opt = document.createElement("option");
+    opt.value = `var:${v.id}`;
+    opt.textContent = variableLabel(v);
+    if (customOption) easingSelect.insertBefore(opt, customOption);
+    else easingSelect.appendChild(opt);
+  });
+  if (Array.from(easingSelect.options).some((o) => o.value === currentEasingValue)) {
+    easingSelect.value = currentEasingValue;
+  }
 }
 
 // ---------- Anim type UI (show/hide move fields) ----------
@@ -149,17 +202,24 @@ function enterEditMode(anim: AnimationSpec) {
   (($("anim-id-input") as HTMLInputElement)).value = anim.id;
   (($("anim-duration") as HTMLInputElement)).value = String(anim.duration);
   (($("anim-delay") as HTMLInputElement)).value = String(anim.delay);
+  (($("anim-duration-variable") as HTMLSelectElement)).value = anim.durationVariableId ?? "";
+  (($("anim-delay-variable") as HTMLSelectElement)).value = anim.delayVariableId ?? "";
 
-  const presetValues = Array.from(easingSelect.options)
-    .map((o) => o.value)
-    .filter((v) => v !== "custom");
-  if (presetValues.includes(anim.easing)) {
-    easingSelect.value = anim.easing;
+  if (anim.easingVariableId) {
+    easingSelect.value = `var:${anim.easingVariableId}`;
     customEasingField.style.display = "none";
   } else {
-    easingSelect.value = "custom";
-    customEasingField.style.display = "block";
-    (($("anim-easing-custom") as HTMLInputElement)).value = anim.easing;
+    const presetValues = Array.from(easingSelect.options)
+      .map((o) => o.value)
+      .filter((v) => v !== "custom" && !v.startsWith("var:"));
+    if (presetValues.includes(anim.easing)) {
+      easingSelect.value = anim.easing;
+      customEasingField.style.display = "none";
+    } else {
+      easingSelect.value = "custom";
+      customEasingField.style.display = "block";
+      (($("anim-easing-custom") as HTMLInputElement)).value = anim.easing;
+    }
   }
 
   if (anim.type === "move") {
@@ -283,8 +343,17 @@ function renderSelected() {
         infoSpan.appendChild(idBadge);
       }
 
+      const durationText = anim.durationVariableId
+        ? `変数:${variableName(anim.durationVariableId, floatVariables)}`
+        : `${anim.duration}ms`;
+      const delayText = anim.delayVariableId
+        ? `変数:${variableName(anim.delayVariableId, floatVariables)}`
+        : `delay ${anim.delay}ms`;
+      const easingText = anim.easingVariableId
+        ? `変数:${variableName(anim.easingVariableId, stringVariables)}`
+        : anim.easing;
       infoSpan.appendChild(
-        document.createTextNode(`${anim.duration}ms / delay ${anim.delay}ms / ${anim.easing}${detail}`),
+        document.createTextNode(`${durationText} / ${delayText} / ${easingText}${detail}`),
       );
 
       const editBtn = document.createElement("button");
@@ -388,6 +457,161 @@ function renderDuplicateWarning(duplicateIds: DuplicateIdWarning[]) {
   el.appendChild(list);
 }
 
+// ---------- Motion timeline sync result ----------
+function renderSyncResult(result: MotionSyncResult) {
+  const el = $("sync-result-banner");
+  el.style.display = "block";
+  el.innerHTML = "";
+
+  const summaryParts: string[] = [];
+  if (result.updated > 0) summaryParts.push(`${result.updated}件を更新`);
+  if (result.removed > 0) summaryParts.push(`${result.removed}件を削除(タイムライン側で消えていたため)`);
+
+  if (summaryParts.length > 0) {
+    const summary = document.createElement("div");
+    summary.textContent = `✓ ${summaryParts.join(" / ")}しました。`;
+    el.appendChild(summary);
+  } else if (result.skipped.length === 0) {
+    el.textContent = "Motionタイムライン側に取り込める変更は見つかりませんでした。";
+    return;
+  }
+
+  if (result.skipped.length > 0) {
+    const heading = document.createElement("div");
+    heading.className = "sync-skip-heading";
+    heading.style.marginTop = summaryParts.length > 0 ? "6px" : "0";
+    heading.textContent = "⚠ 以下は自動で取り込めませんでした:";
+    el.appendChild(heading);
+
+    const list = document.createElement("ul");
+    list.className = "sync-skip-list";
+    result.skipped.forEach((s) => {
+      const li = document.createElement("li");
+      li.textContent = `${s.name}: ${s.reason}`;
+      list.appendChild(li);
+    });
+    el.appendChild(list);
+  }
+}
+
+// ---------- Animation browse (drill-down: tagged layers -> their animations) ----------
+// Separate from the JSON preview tab — a browsable view rather than raw JSON. Built
+// entirely from latestExportJson (already fetched for the JSON tab), so no extra
+// plugin round-trip is needed. Read-only: ExportJson deliberately omits nodeId, so
+// there's nothing here to select-on-canvas or edit — only src/ui.ts should own
+// editing, kept in the "選択中" tab.
+let browseIndex: number | null = null;
+
+function taggedElementsWithAnimations(): ExportElement[] {
+  return (latestExportJson?.elements ?? []).filter((e) => e.animations.length > 0);
+}
+
+function exportAnimDetailText(anim: ExportAnimation): string {
+  if (anim.type === "move" && anim.position) {
+    const { from, to } = anim.position;
+    return ` (${from.x}, ${from.y}) → (${to.x}, ${to.y})`;
+  }
+  if (anim.type === "resize") {
+    if (anim.size) {
+      const { from, to } = anim.size;
+      return ` ${from.width}×${from.height} → ${to.width}×${to.height}`;
+    }
+    if (anim.scale) {
+      const { from, to } = anim.scale;
+      return ` x:${from.x}%→${to.x}% y:${from.y}%→${to.y}%`;
+    }
+  }
+  return "";
+}
+
+function renderAnimBrowse() {
+  const container = $("browse-content");
+  const elements = taggedElementsWithAnimations();
+  // The drilled-into layer is tracked by its position in this list, not a stable id
+  // (ExportJson has no nodeId, and the "id" field isn't guaranteed unique — see the
+  // duplicate-ID warning). If a re-render shrinks the list past that position (e.g.
+  // its last animation was deleted), fall back to the list view.
+  if (browseIndex !== null && browseIndex >= elements.length) browseIndex = null;
+
+  container.innerHTML = "";
+
+  if (elements.length === 0) {
+    container.innerHTML = '<div class="empty">アニメーションを持つレイヤーはまだありません</div>';
+    return;
+  }
+
+  if (browseIndex === null) {
+    elements.forEach((el, i) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "browse-row";
+
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = el.id ? `${el.name} (${el.id})` : el.name;
+      row.appendChild(nameSpan);
+
+      const countSpan = document.createElement("span");
+      countSpan.className = "browse-count";
+      countSpan.textContent = `${el.animations.length}件 ›`;
+      row.appendChild(countSpan);
+
+      row.addEventListener("click", () => {
+        browseIndex = i;
+        renderAnimBrowse();
+      });
+      container.appendChild(row);
+    });
+    return;
+  }
+
+  const el = elements[browseIndex];
+
+  const backBtn = document.createElement("button");
+  backBtn.type = "button";
+  backBtn.className = "secondary browse-back-btn";
+  backBtn.textContent = "← レイヤー一覧に戻る";
+  backBtn.addEventListener("click", () => {
+    browseIndex = null;
+    renderAnimBrowse();
+  });
+  container.appendChild(backBtn);
+
+  const heading = document.createElement("div");
+  heading.className = "browse-heading";
+  heading.textContent = el.id ? `${el.name} (${el.id})` : el.name;
+  container.appendChild(heading);
+
+  el.animations.forEach((anim) => {
+    const item = document.createElement("div");
+    item.className = "anim-item";
+
+    const infoSpan = document.createElement("span");
+    const badge = document.createElement("span");
+    badge.className = "anim-badge";
+    badge.textContent = animTypeLabel(anim.type);
+    infoSpan.appendChild(badge);
+
+    if (anim.id) {
+      const idBadge = document.createElement("span");
+      idBadge.className = "anim-id-badge";
+      idBadge.textContent = anim.id;
+      infoSpan.appendChild(idBadge);
+    }
+
+    const durationText = anim.durationVariable ? `変数:${anim.durationVariable}` : `${anim.duration}ms`;
+    const delayText = anim.delayVariable ? `変数:${anim.delayVariable}` : `delay ${anim.delay}ms`;
+    const easingText = anim.easingVariable ? `変数:${anim.easingVariable}` : anim.easing;
+    infoSpan.appendChild(
+      document.createTextNode(
+        `${durationText} / ${delayText} / ${easingText}${exportAnimDetailText(anim)}`,
+      ),
+    );
+
+    item.appendChild(infoSpan);
+    container.appendChild(item);
+  });
+}
+
 // ---------- Event handlers ----------
 $("save-tag-btn").addEventListener("click", () => {
   if (currentSelection.length !== 1) return;
@@ -400,13 +624,23 @@ $("delete-tag-btn").addEventListener("click", () => {
   send({ type: "delete-tag", nodeId: currentSelection[0].nodeId });
 });
 
+$("sync-from-motion-btn").addEventListener("click", () => {
+  if (currentSelection.length !== 1) return;
+  send({ type: "sync-from-motion", nodeId: currentSelection[0].nodeId });
+});
+
 $("add-anim-btn").addEventListener("click", () => {
   if (currentSelection.length !== 1) return;
   const type = animTypeSelect.value as AnimationType;
   const id = (($("anim-id-input") as HTMLInputElement)).value.trim();
   const duration = Number((($("anim-duration") as HTMLInputElement)).value) || 0;
   const delay = Number((($("anim-delay") as HTMLInputElement)).value) || 0;
-  const easing = getSelectedEasing();
+  const durationVariableId = (($("anim-duration-variable") as HTMLSelectElement)).value;
+  const delayVariableId = (($("anim-delay-variable") as HTMLSelectElement)).value;
+  const easingVariableId = easingSelect.value.startsWith("var:") ? easingSelect.value.slice(4) : "";
+  // When easing is bound to a variable, the literal `easing` field is just a
+  // safe fallback (used if the variable is later deleted) — not user-chosen.
+  const easing = easingVariableId ? "linear" : getSelectedEasing();
 
   const animation: AnimationSpec = {
     animId: editingAnimId ?? `anim_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -416,6 +650,9 @@ $("add-anim-btn").addEventListener("click", () => {
     delay,
     easing,
   };
+  if (durationVariableId) animation.durationVariableId = durationVariableId;
+  if (delayVariableId) animation.delayVariableId = delayVariableId;
+  if (easingVariableId) animation.easingVariableId = easingVariableId;
 
   if (type === "move") {
     const mode = moveModeSelect.value === "delta" ? "delta" : "absolute";
@@ -486,6 +723,15 @@ window.addEventListener("message", (event: MessageEvent) => {
       latestExportJson = msg.json;
       renderJsonPreview();
       renderDuplicateWarning(msg.duplicateIds);
+      renderAnimBrowse();
+      break;
+    case "variables":
+      floatVariables = msg.floatVariables;
+      stringVariables = msg.stringVariables;
+      renderVariableOptions();
+      break;
+    case "motion-sync-result":
+      renderSyncResult(msg);
       break;
     case "error":
       showError(msg.message);
@@ -505,4 +751,5 @@ function downloadJson(json: ExportJson) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+renderAnimBrowse();
 send({ type: "ui-ready" });

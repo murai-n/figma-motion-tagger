@@ -38,3 +38,19 @@ export function isValidEasingInput(easing: string): boolean {
   if (easing in EASING_PRESETS) return true;
   return CUBIC_BEZIER_RE.test(easing.trim());
 }
+
+const BEZIER_MATCH_EPSILON = 1e-4;
+
+/**
+ * Reverse of resolveEasingToBezier: given a bezier tuple (e.g. read back from a Figma
+ * Motion keyframe that a user hand-edited), returns the matching preset name if it's
+ * close enough to one of ours, otherwise a "cubic-bezier(...)" string.
+ */
+export function bezierToEasing(bezier: [number, number, number, number]): string {
+  for (const name of EASING_PRESET_NAMES) {
+    const preset = EASING_PRESETS[name];
+    if (preset.every((v, i) => Math.abs(v - bezier[i]) < BEZIER_MATCH_EPSILON)) return name;
+  }
+  const round = (n: number) => Math.round(n * 1000) / 1000;
+  return `cubic-bezier(${round(bezier[0])}, ${round(bezier[1])}, ${round(bezier[2])}, ${round(bezier[3])})`;
+}
